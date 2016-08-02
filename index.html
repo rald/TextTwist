@@ -1,0 +1,1002 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>TextTwist</title>
+		<style>
+		</style>
+	</head>
+	<body>
+		<canvas id="canvas"></canvas>
+		<script>
+
+			function rnd(n) {
+				return Math.floor(Math.random()*n);
+			}
+			
+			function shuffle(a) {
+				for(var i=a.length-1;i>0;i--) {
+					var j=rnd(i+1);
+					var t=a[i];
+					a[i]=a[j];
+					a[j]=t;
+				}
+			}
+			
+			function distance(x1,y1,x2,y2) {
+				return Math.sqrt(Math.pow(x2-x1,2)+Math.pow(y2-y1,2));
+			}
+			
+			function showMessage(newMessage) {
+				message=newMessage;
+				isMessageVisible=true;
+			}
+
+			function createAnagramsCanvas() {
+				var size=16;
+				var gap=2;
+				var startX=18;
+				var startY=16;
+				var x=startX;
+				var y=startY;
+				var newX=0;
+				
+				anagramsCanvas.height=canvas.height-194;
+
+				for(var i=0;i<anagrams.length;i++) {
+					var anagram=anagrams[i];
+					x=startX;
+					for(var j=0;j<anagram.length;j++) {
+						x+=size+gap;
+						if(newX<x) {
+							newX=x;
+						}
+					}				
+					y+=size+gap;
+					if(y>=anagramsCanvas.height) {
+						startX=newX+size/2;
+						y=startY;
+					}
+				}
+
+				anagramsCanvas.width=x;
+
+				anagramsCtx.fillStyle="#515151";
+				anagramsCtx.fillRect(0,0,anagramsCanvas.width,anagramsCanvas.height);
+				anagramsCtx.beginPath();
+				anagramsCtx.strokeStyle="#EEEEEE";
+				anagramsCtx.rect(4,0,anagramsCanvas.width-8,anagramsCanvas.height);
+				anagramsCtx.stroke();
+				anagramsCtx.closePath();
+				
+				y=startY;
+				startX=18;
+				newX=0;
+				
+				for(var i=0;i<anagrams.length;i++) {
+					var anagram=anagrams[i];
+					x=startX;
+					for(var j=0;j<anagram.length;j++) {
+						if(guessed[i]) {
+							anagramsCtx.fillStyle="#EEEEEE";
+							anagramsCtx.fillRect(x-size/2,y-size/2,size,size);
+							anagramsCtx.fillStyle="#0080FF";
+							anagramsCtx.font="bold 12px verdana";
+							anagramsCtx.textAlign="center";
+							anagramsCtx.textBaseline="middle";
+							anagramsCtx.fillText(anagram.charAt(j).toUpperCase(),x,y);
+						} else if(isDisplayAllAnagrams) {
+							anagramsCtx.fillStyle="#0080FF";
+							anagramsCtx.fillRect(x-size/2,y-size/2,size,size);
+							anagramsCtx.fillStyle="#EEEEEE";
+							anagramsCtx.font="bold 12px verdana";
+							anagramsCtx.textAlign="center";
+							anagramsCtx.textBaseline="middle";
+							anagramsCtx.fillText(anagram.charAt(j).toUpperCase(),x,y);
+						} else {
+							anagramsCtx.fillStyle="#EEEEEE";
+							anagramsCtx.fillRect(x-size/2,y-size/2,size,size);
+						}
+						x+=size+gap;
+						if(newX<x) {
+							newX=x;
+						}
+					}				
+					y+=size+gap;
+					if(y>=anagramsCanvas.height) {
+						startX=newX+size/2;
+						y=startY;
+					}
+				}
+			}
+			
+			function drawAnagramsCanvas() {
+				ctx.fillStyle="#515151";
+				ctx.fillRect(0,192,canvas.width,canvas.height);
+				ctx.drawImage(anagramsCanvas,anagramsCanvasX,0,canvas.width,anagramsCanvas.height,0,192,canvas.width,anagramsCanvas.height);
+			}
+			
+			function clockTick() {
+				if(remainingTime>0) remainingTime--;
+			}
+			
+			function getMousePosition(evt) {
+				var rect=canvas.getBoundingClientRect();
+				return {
+					x:evt.clientX-rect.left,
+					y:evt.clientY-rect.top
+				}
+			}
+
+			function onMouseMoved(evt) {
+				var mousePosition=getMousePosition(evt);
+				mouse.x=mousePosition.x;
+				mouse.y=mousePosition.y;
+			}
+
+			function onMouseDown(evt) {
+				var mousePosition=getMousePosition(evt);
+				mouse.x=mousePosition.x;
+				mouse.y=mousePosition.y;
+				mouse.button=evt.button;
+			}
+
+			function onMouseUp(evt) {
+				var mousePosition=getMousePosition(evt);
+				mouse.x=mousePosition.x;
+				mouse.y=mousePosition.y;
+				mouse.button=-1;
+			}
+
+			function Mouse() {
+				this.x=0;
+				this.y=0;
+				this.button=-1;
+			}
+
+			function Sound(src) {
+				this.sound=document.createElement("audio");
+				this.sound.src=src;
+				this.sound.setAttribute("preload","auto");
+				this.sound.setAttribute("controls","none");
+				this.sound.style.display="none";
+				document.body.appendChild(this.sound);
+				this.play=function() {
+					this.sound.play();
+				}
+				this.stop=function() {
+					this.sound.pause();
+					this.sound.currentTime=0;
+				}
+				this.pause=function() {
+					this.sound.pause();
+				}
+			}
+	
+			function Circle(x,y,radius) {
+				this.x=x;
+				this.y=y;
+				this.radius=radius;
+				this.containsBallIndex=-1;
+				
+				this.draw=function() {
+					ctx.beginPath();
+					ctx.fillStyle="#515151";
+					ctx.arc(this.x,this.y,this.radius,0,2*Math.PI);
+					ctx.fill();
+					ctx.closePath();
+					ctx.beginPath();
+					ctx.strokeStyle="#EEEEEE";
+					ctx.arc(this.x,this.y,this.radius,0,2*Math.PI);
+					ctx.stroke();
+					ctx.closePath();					
+				}
+			}
+			
+			function Box(x,y,width,height) {
+				this.x=x;
+				this.y=y;
+				this.width=width;
+				this.height=height;
+				this.containsBallIndex=-1;
+				
+				this.draw=function() {
+					
+					ctx.fillStyle="#515151";
+					ctx.fillRect(this.x-this.width/2,this.y-this.height/2,this.width,this.height);
+					
+					ctx.beginPath();
+					ctx.strokeStyle="#EEEEEE";
+					ctx.rect(this.x-this.width/2,this.y-this.height/2,this.width,this.height);
+					ctx.stroke();
+					ctx.closePath();
+					
+				}
+				
+			}
+			
+			function Ball(letter,x,y,radius) {
+				this.letter=letter;
+				this.x=x;
+				this.y=y;
+				this.radius=radius;
+				this.dx=0;
+				this.dy=0;
+				this.moving=false;
+				this.speed=10;
+				this.state="up";
+				this.used=false;
+				this.enabled="true";
+				
+				this.draw=function() {
+				
+					if(this.enabled) {
+				
+						ctx.font="16px verdana";
+						
+						switch(this.state) {
+							case "up":
+								ctx.beginPath();
+								ctx.fillStyle="#0080FF";
+								ctx.arc(this.x,this.y,this.radius,0,2*Math.PI);
+								ctx.fill();
+								ctx.closePath();
+								ctx.beginPath();
+								ctx.strokeStyle="#EEEEEE";
+								ctx.arc(this.x,this.y,this.radius,0,2*Math.PI);
+								ctx.stroke();
+								ctx.closePath();
+								ctx.fillStyle="#EEEEEE";
+								ctx.textAlign="center";
+								ctx.textBaseline="middle";
+								ctx.fillText(this.letter.toUpperCase(),this.x,this.y);
+								break;
+							case "over":
+								ctx.beginPath();
+								ctx.fillStyle="#EEEEEE";
+								ctx.arc(this.x,this.y,this.radius,0,2*Math.PI);
+								ctx.fill();
+								ctx.closePath();
+								ctx.beginPath();
+								ctx.strokeStyle="#0080FF";
+								ctx.arc(this.x,this.y,this.radius,0,2*Math.PI);
+								ctx.stroke();
+								ctx.closePath();
+								ctx.fillStyle="#0080FF";
+								ctx.textAlign="center";
+								ctx.textBaseline="middle";
+								ctx.fillText(this.letter.toUpperCase(),this.x,this.y);
+								break;
+							case "down":
+								ctx.beginPath();
+								ctx.fillStyle="#0080FF";
+								ctx.arc(this.x,this.y,this.radius,0,2*Math.PI);
+								ctx.fill();
+								ctx.closePath();
+								ctx.beginPath();
+								ctx.strokeStyle="#EEEEEE";
+								ctx.arc(this.x,this.y,this.radius,0,2*Math.PI);
+								ctx.stroke();
+								ctx.closePath();
+								ctx.fillStyle="#EEEEEE";
+								ctx.textAlign="center";
+								ctx.textBaseline="middle";
+								ctx.fillText(this.letter.toUpperCase(),this.x,this.y);
+								break;
+						}
+					} else {
+						ctx.beginPath();
+						ctx.fillStyle="#515151";
+						ctx.arc(this.x,this.y,this.radius,0,2*Math.PI);
+						ctx.fill();
+						ctx.closePath();
+						ctx.beginPath();
+						ctx.strokeStyle="#EEEEEE";
+						ctx.arc(this.x,this.y,this.radius,0,2*Math.PI);
+						ctx.stroke();
+						ctx.closePath();
+						ctx.fillStyle="#EEEEEE";
+						ctx.textAlign="center";
+						ctx.textBaseline="middle";
+						ctx.fillText(this.letter.toUpperCase(),this.x,this.y);
+					}
+				}
+				
+				this.update=function() {
+					if(this.moving) {
+						var diffx=this.dx-this.x;
+						var diffy=this.dy-this.y;
+						
+						this.x+=diffx/this.speed;
+						this.y+=diffy/this.speed;
+						
+						if(Math.abs(diffx)<1) {
+							this.x=this.dx;
+						}
+						
+						if(Math.abs(diffy)<1) {
+							this.y=this.dy;
+						}
+						
+						if(this.x==this.dx && this.y==this.dy) {
+							this.moving=false;
+						}
+					}
+				}
+				
+				this.handleEvents=function() {
+					if(this.enabled) {
+						if(distance(mouse.x,mouse.y,this.x,this.y)<=this.radius) {
+							if(mouse.button==-1) {
+								if(this.state=="down") {
+									this.state="over";
+									return true;
+								}
+								this.state="over";
+							} else if(mouse.button==0) {
+								this.state="down";
+							}
+						} else {
+							this.state="up";
+							return false;
+						}
+					}
+				}
+			}
+			
+			function Button(text,x,y,width,height) {
+				this.text=text;
+				this.x=x;
+				this.y=y;
+				this.width=width;
+				this.height=height;
+				this.state="up";
+				this.enabled=true;
+				
+				this.draw=function() {
+
+					ctx.font="16px verdana";
+
+					if(this.enabled) {
+					
+						switch(this.state) {
+							case "up":
+								ctx.beginPath();
+								ctx.fillStyle="#0080FF";
+								ctx.fillRect(this.x,this.y,this.width,this.height);
+								ctx.fill();
+								ctx.closePath();
+			
+								ctx.beginPath();
+								ctx.strokeStyle="#EEEEEE";
+								ctx.rect(this.x,this.y,this.width,this.height);
+								ctx.stroke();
+								ctx.closePath();
+			
+								ctx.fillStyle="#EEEEEE";
+								ctx.textAlign="center";
+								ctx.textBaseline="middle";
+								ctx.fillText(this.text,this.x+this.width/2,this.y+this.height/2);
+								break;
+								
+							case "over":
+								ctx.beginPath();
+								ctx.fillStyle="#EEEEEE";
+								ctx.fillRect(this.x,this.y,this.width,this.height);
+								ctx.fill();
+								ctx.closePath();
+			
+								ctx.beginPath();
+								ctx.strokeStyle="#0080FF";
+								ctx.rect(this.x,this.y,this.width,this.height);
+								ctx.stroke();
+								ctx.closePath();
+			
+								ctx.fillStyle="#0080FF";
+								ctx.textAlign="center";
+								ctx.textBaseline="middle";
+								ctx.fillText(this.text,this.x+this.width/2,this.y+this.height/2);
+								break;
+	
+							case "down":
+								ctx.beginPath();
+								ctx.fillStyle="#0080FF";
+								ctx.fillRect(this.x,this.y,this.width,this.height);
+								ctx.fill();
+								ctx.closePath();
+			
+								ctx.beginPath();
+								ctx.strokeStyle="#EEEEEE";
+								ctx.rect(this.x,this.y,this.width,this.height);
+								ctx.stroke();
+								ctx.closePath();
+			
+								ctx.fillStyle="#EEEEEE";
+								ctx.textAlign="center";
+								ctx.textBaseline="middle";
+								ctx.fillText(this.text,this.x+this.width/2,this.y+this.height/2);
+								break;
+						}
+						
+					} else {
+					
+						ctx.beginPath();
+						ctx.fillStyle="#515151";
+						ctx.fillRect(this.x,this.y,this.width,this.height);
+						ctx.fill();
+						ctx.closePath();
+	
+						ctx.beginPath();
+						ctx.strokeStyle="#EEEEEE";
+						ctx.rect(this.x,this.y,this.width,this.height);
+						ctx.stroke();
+						ctx.closePath();
+	
+						ctx.fillStyle="#EEEEEE";
+						ctx.textAlign="center";
+						ctx.textBaseline="middle";
+						ctx.fillText(this.text,this.x+this.width/2,this.y+this.height/2);
+						
+					}
+				}
+				
+				this.handleEvents=function() {
+
+					if(this.enabled) {
+						if(mouse.x>=this.x && mouse.x<=this.x+this.width && mouse.y>=this.y && mouse.y<=this.y+this.height) {
+							if(mouse.button==-1) {
+								if(this.state=="down") {
+									this.state="over";
+									return true;
+								}
+								this.state="over";
+							} else if(mouse.button==0) {
+								this.state="down";
+							}
+						} else {
+							this.state="up";
+							return false;
+						}
+					}
+				}
+				
+			}
+
+			function init() {
+				var ajax=new XMLHttpRequest();
+				ajax.onreadystatechange=function() {
+					if(ajax.readyState==4 && ajax.status==200) {
+						var json=JSON.parse(ajax.responseText);
+						word=json.word;
+						anagrams=json.anagrams;
+						
+						shuffle(anagrams);
+						
+						anagrams.sort(function(a,b) {
+							return a.length-b.length;
+						});
+						
+						longWordLength=word.length;
+						
+						guessed=[];
+						for(var i=0;i<anagrams.length;i++) {
+							guessed.push(false);
+						}
+						
+						balls=[];
+						boxes=[];
+						circles=[];
+					
+						for(var i=0;i<word.length;i++) {
+							boxes.push(new Box(i*(44+4)+32,32,44,44));
+							balls.push(new Ball(word.charAt(i),i*(44+4)+32,84,20));
+							circles.push(new Circle(i*(44+4)+32,84,12));
+						}
+						
+						var indexes=[];
+						for(var i=0;i<circles.length;i++) {
+							indexes.push(i);
+						}
+						shuffle(indexes);
+						for(var i=0;i<balls.length;i++) {
+							balls[i].x=circles[indexes[i]].x;
+							balls[i].y=circles[indexes[i]].y;
+							circles[indexes[i]].containsBallIndex=i;
+						}
+						
+						twistButton=new Button("Twist",10,112,96,32);
+						enterButton=new Button("Enter",114,112,96,32);
+						lastWordButton=new Button("Last Word",218,112,96,32);
+						clearButton=new Button("Clear",322,112,96,32);
+						
+						gameState="start";
+					}
+				}	
+				ajax.open("GET","anagrams.php",true);
+				ajax.send();
+			}
+
+			function draw() {
+
+				ctx.fillStyle="#515151";
+				ctx.fillRect(0,0,canvas.width,192);
+				
+				switch(gameState) {
+				
+					case "init":
+					
+						ctx.fillStyle="#FFFFFF";
+						ctx.textAlign="center";
+						ctx.textBaseline="middle";
+						ctx.fillText("Loading...",canvas.width/2,canvas.height/2);
+						
+						break;
+					
+					case "start":
+
+						if(isFirstStart) {
+							createAnagramsCanvas();
+							drawAnagramsCanvas();
+							clockInterval=setInterval(function(){clockTick();},1000);
+							isFirstStart=false;
+						}
+
+						if(mouse.x>=0 && mouse.x<=canvas.width && mouse.y>=192 && mouse.y<=canvas.height) {
+						
+							if(isDragStarted) {
+								stopDrag=mouse.x;
+								var dragDiff=stopDrag-startDrag;
+								anagramsCanvasX-=dragDiff;
+								if(anagramsCanvasX<0) anagramsCanvasX=0;
+								if(anagramsCanvas.width<canvas.width) anagramsCanvasX=0;
+								
+								if(anagramsCanvas.width>=canvas.width && anagramsCanvasX>=anagramsCanvas.width-canvas.width) {
+									anagramsCanvasX=anagramsCanvas.width-canvas.width;
+								}
+								
+								drawAnagramsCanvas();
+								isDragStarted=false;
+							}
+							
+							if(mouse.button==0 && !isDragStarted) {
+								isDragStarted=true;
+								startDrag=mouse.x;
+							} 
+							
+							if(mouse.button==-1) {
+								isDragStarted=false;
+							}
+						}
+
+						for(var i=0;i<balls.length;i++) {
+							balls[i].update();
+						}
+
+						for(var i=0;i<boxes.length;i++) {
+							boxes[i].draw();
+						}
+						
+						for(var i=0;i<circles.length;i++) {
+							circles[i].draw();
+						}
+												
+						for(var i=0;i<balls.length;i++) {
+							balls[i].draw();
+						}
+
+						ctx.font="bold 16px verdana";
+						ctx.fillStyle="#EEEEEE";
+						ctx.textAlign="left";
+						ctx.textBaseline="bottom";
+						var mins=Math.floor(remainingTime/60);
+						var secs=remainingTime%60;
+						ctx.fillText("Time: "+mins+":"+(secs<10?"0"+secs:secs),canvas.width-168,32);
+						ctx.fillText("Score: "+score,canvas.width-174,72);
+						if(previousTime!=remainingTime) {
+							if(remainingTime<10) {
+								clockTickSound.play();
+							}
+							if(remainingTime==0) {
+								setTimeout(function(){
+									timeUpSound.play();
+									
+									twistButton.enabled=false;
+									enterButton.enabled=false;
+									lastWordButton.enabled=false;
+									clearButton.enabled=false;
+									
+									for(var i=0;i<balls.length;i++) {
+										balls[i].enabled=false;
+									}
+								
+									isMessageVisible=false;
+								
+									while(currentBoxIndex) {
+										for(var i=circles.length-1;i>=0;i--) {
+											if(circles[i].containsBallIndex==-1) {
+												currentBoxIndex--;
+												var j=boxes[currentBoxIndex].containsBallIndex;
+												boxes[currentBoxIndex].containsBallIndex=-1;
+												circles[i].containsBallIndex=j;
+												balls[j].dx=circles[i].x;
+												balls[j].dy=circles[i].y;
+												balls[j].used=false;
+												balls[j].moving=true;
+												break;
+											}
+										}
+									}
+									
+									isDisplayAllAnagrams=true;
+									createAnagramsCanvas();
+									drawAnagramsCanvas();
+									
+									isGameOver=true;
+																	
+								},1000);
+							}							
+						}
+						previousTime=remainingTime;
+						
+
+						if(!isGameOver) {
+							
+							var moving=false;
+							
+							for(var i=0;i<balls.length;i++) {
+								if(balls[i].moving) {
+									moving=true;
+									break;
+								}
+							}
+	
+							if(currentBoxIndex==0) {
+								enterButton.enabled=false;
+								clearButton.enabled=false;
+							} else {
+								enterButton.enabled=true;
+								clearButton.enabled=true;
+							} 
+							
+							if(currentBoxIndex==longWordLength) {
+								twistButton.enabled=false;
+							} else {
+								twistButton.enabled=true;	
+							}
+	
+							if(lastWordBallIndexes.length==0 || currentBoxIndex!=0) {
+								lastWordButton.enabled=false;
+							} else {
+								lastWordButton.enabled=true;
+							}					
+								
+							if(isMessageVisible) {
+								var x=10;
+								var y=152;
+								var width=408;
+								var height=32;
+								ctx.fillStyle="#0080FF";
+								ctx.fillRect(x,y,width,height);
+								ctx.beginPath();
+								ctx.strokeStyle="#EEEEEE";
+								ctx.rect(x,y,width,height);
+								ctx.stroke();
+								ctx.closePath();
+								ctx.fillStyle="#EEEEEE";
+								ctx.textAlign="center";
+								ctx.textBaseline="middle";
+								ctx.font="12px verdana";
+								ctx.fillText(message,x+width/2,y+height/2);
+							}
+						}
+																									
+						twistButton.draw();
+						enterButton.draw();
+						lastWordButton.draw();
+						clearButton.draw();
+						
+						if(!isGameOver) {
+						
+							if(twistButtonClicked) {
+							
+								twistSound.stop();
+	
+								isMessageVisible=false;
+	
+								var indexes=[];
+						
+								for(var i=0;i<circles.length;i++) {
+									indexes.push(i);
+									circles[i].containsBallIndex=-1;
+								}
+								shuffle(indexes);
+								for(var i=0;i<balls.length;i++) {
+									if(!balls[i].used) {
+										balls[i].dx=circles[indexes[i]].x;
+										balls[i].dy=circles[indexes[i]].y;
+										circles[indexes[i]].containsBallIndex=i;
+									}
+								}
+								for(var i=0;i<balls.length;i++) {
+									if(!balls[i].used) {
+										balls[i].moving=true;							
+									}
+								}
+								
+								twistSound.play();
+								
+							} else if(enterButtonClicked) {
+								
+								isMessageVisible=false;
+	
+								guess="";
+								for(var i=0;i<currentBoxIndex;i++) {
+									var j=boxes[i].containsBallIndex;
+									guess+=balls[j].letter;
+								}
+	
+								lastWordBallIndexes=[];
+								for(var i=0;i<currentBoxIndex;i++) {
+									var j=boxes[i].containsBallIndex;
+									lastWordBallIndexes.push(j);
+								}
+								
+								var anagramIndex=anagrams.indexOf(guess);
+								
+								if(anagramIndex!=-1) {
+									
+									if(!guessed[anagramIndex]) {
+	
+										guessed[anagramIndex]=true;
+										numberOfGuessedWords++;
+										
+										score+=Math.pow(2,guess.length);
+										
+										createAnagramsCanvas();
+										drawAnagramsCanvas();
+										
+										if(numberOfGuessedWords==anagrams.length) {
+											showMessage("Congratulations! You got all the words."); 
+											gotAllWordsSound.play();
+										} else if(guess.length==longWordLength) {
+											showMessage("You got the "+longWordLength+" letter word! You qualify for the next round.");
+											longWordFoundSound.play();
+										} else {
+											wordFoundSound.play();
+										}
+										
+									} else {
+									
+										showMessage("You've already guessed that word!");
+										errorSound.play();
+										
+									}
+									
+								} else {
+								
+									showMessage("Sorry, that's not one of the listed words.");
+									errorSound.play();
+									
+								}
+								
+								while(currentBoxIndex) {
+									for(var i=circles.length-1;i>=0;i--) {
+										if(circles[i].containsBallIndex==-1) {
+											currentBoxIndex--;
+											var j=boxes[currentBoxIndex].containsBallIndex;
+											boxes[currentBoxIndex].containsBallIndex=-1;
+											circles[i].containsBallIndex=j;
+											balls[j].dx=circles[i].x;
+											balls[j].dy=circles[i].y;
+											balls[j].used=false;
+											balls[j].moving=true;
+											break;
+										}
+									}
+								}
+								
+							} else if(lastWordButtonClicked) {
+							
+								isMessageVisible=false;
+							
+								if(currentBoxIndex==0) {
+								
+									for(var i=0;i<lastWordBallIndexes.length;i++) {
+	
+										var ballIndex=lastWordBallIndexes[i];
+	
+										for(var j=0;j<circles.length;j++) {
+											if(circles[j].containsBallIndex==ballIndex) {
+												circles[j].containsBallIndex=-1;
+												break;
+											}
+										}
+	
+										balls[ballIndex].dx=boxes[currentBoxIndex].x;
+										balls[ballIndex].dy=boxes[currentBoxIndex].y;
+										balls[ballIndex].used=true;
+										balls[ballIndex].moving=true;
+										boxes[currentBoxIndex].containsBallIndex=ballIndex;
+										currentBoxIndex++;
+										
+									}
+	
+									ballClickedSound.play();
+									
+								}
+							} else if(clearButtonClicked) {
+							
+								isMessageVisible=false;
+							
+								while(currentBoxIndex) {
+									for(var i=circles.length-1;i>=0;i--) {
+										if(circles[i].containsBallIndex==-1) {
+											currentBoxIndex--;
+											var j=boxes[currentBoxIndex].containsBallIndex;
+											boxes[currentBoxIndex].containsBallIndex=-1;
+											circles[i].containsBallIndex=j;
+											balls[j].dx=circles[i].x;
+											balls[j].dy=circles[i].y;
+											balls[j].used=false;
+											balls[j].moving=true;
+											break;
+										}
+									}
+								}
+							}
+	
+							for(var i=0;i<balls.length;i++) {
+								if(balls[i].handleEvents()) {
+									if(!balls[i].used) {
+										for(var j=0;j<circles.length;j++) {
+											if(circles[j].containsBallIndex==i) {
+												circles[j].containsBallIndex=-1;
+												break;
+											}
+										}
+										balls[i].used=true;
+										balls[i].dx=boxes[currentBoxIndex].x;
+										balls[i].dy=boxes[currentBoxIndex].y;
+										boxes[currentBoxIndex].containsBallIndex=i;
+										currentBoxIndex++;
+										balls[i].moving=true;
+										ballClickedSound.play();																
+										break;
+									} else {
+										if(i==boxes[currentBoxIndex-1].containsBallIndex) {
+											for(var j=circles.length-1;j>=0;j--) {
+												if(circles[j].containsBallIndex==-1) {
+													currentBoxIndex--;
+													boxes[currentBoxIndex].containsBallIndex=-1;
+													circles[j].containsBallIndex=i;
+													balls[i].dx=circles[j].x;
+													balls[i].dy=circles[j].y;
+													balls[i].used=false;
+													balls[i].moving=true;
+													ballClickedSound.play();
+													break;
+												}
+											}
+										}
+									}
+								}
+							}
+						
+							twistButtonClicked=twistButton.handleEvents();
+							enterButtonClicked=enterButton.handleEvents();
+							lastWordButtonClicked=lastWordButton.handleEvents();
+							clearButtonClicked=clearButton.handleEvents();
+							
+						}
+						
+					break;
+				}
+			}
+
+			var canvas;
+			var ctx;		
+			var fps;
+			var gameState;
+			var word;
+			var anagrams;
+			var balls;
+			var boxes;
+			var circles;
+			var twistButton;
+			var enterButton;
+			var lastWordButton;
+			var clearButton;
+			var twistButtonClicked;
+			var enterButtonClicked;
+			var lastWordButtonClicked;
+			var clearButtonClicked;
+			var message;
+			var isMessageVisible;
+			var messageTimeout;
+			var mouse;
+			var currentBoxIndex;
+			var lastWordBallIndexes;
+			var wordFoundSound;
+			var gotAllWordsSound;
+			var twistSound;
+			var ballClickedSound;
+			var wordNotFoundSound;
+			var longWordFoundSound;
+			var timeUpSound;
+			var clockTickSound;
+			var errorSound;
+			var guessed;
+			var longWordLength;
+			var isFirstStart;
+			var anagramsCanvas;
+			var anagramsCtx;
+			var numberOfGuessedWords;
+			var animationInterval;
+			var clockInterval;
+			var allottedTime;
+			var remainingTime;
+			var previousTime;
+			var isGameOver;
+			var isQualifyForNextRound
+			var anagramsCanvasX;
+			var startDrag;
+			var stopDrag;
+			var isDragStarted;
+			var isDisplayAllAnagrams;
+			var score;
+
+			fps=60;
+			gameState="init";
+			canvas=document.getElementById("canvas");
+			canvas.width=640;
+			canvas.height=480;
+			ctx=canvas.getContext("2d");
+			ctx.font="16px verdana";
+			mouse=new Mouse();
+			shuffleButtonClicked=false;
+			currentBoxIndex=0;
+			message="";
+			isMessageVisible=false;
+			messageTimeout=false;
+			lastWordBallIndexes=[];
+			wordFoundSound=new Sound("sounds/8.ogg");
+			twistSound=new Sound("sounds/7.ogg");
+			ballClickedSound=new Sound("sounds/5.ogg");
+			longWordFoundSound=new Sound("sounds/6.ogg");
+			timeUpSound=new Sound("sounds/2.ogg");
+			gotAllWordsSound=new Sound("sounds/1.ogg");
+			clockTickSound=new Sound("sounds/3.ogg");
+			errorSound=new Sound("sounds/4.ogg");
+			isFirstStart=true;
+			numberOfGuessedWords=0;
+			allottedTime=180;
+			remainingTime=allottedTime;
+			previousTime=-1;
+			isGameOver=false;
+			isQualifyForNextRound=false;
+			anagramsCanvasX=0;
+			startDrag=0;
+			stopDrag=0;
+			isDragStarted=false;
+			isDisplayAllAnagrams=false;
+			score=0;
+
+			document.body.style.backgroundColor="#000000";
+
+			ctx.fillStyle="#515151";
+			ctx.fillRect(0,0,canvas.width,canvas.height);
+			
+			anagramsCanvas=document.createElement("canvas");
+			anagramsCtx=anagramsCanvas.getContext("2d");
+			
+			animationInterval=setInterval(function(){draw();},1000/fps);
+			
+			canvas.addEventListener("mousemove",onMouseMoved);
+			canvas.addEventListener("mousedown",onMouseDown);
+			canvas.addEventListener("mouseup",onMouseUp);
+						
+			init();
+			
+		</script>
+	</body>
+</html>
