@@ -51,10 +51,7 @@
 	$chosen=filterWords($dict,6,8);
 	
 	$word=$chosen[array_rand($chosen)];
-//	$word="jiggly";
-//	$word="dentures";
-//	$word="snrieg";
-	
+
 	$anagrams=getAnagrams($word,$dict);
 	
 	$result=array('word'=>$word,'anagrams'=>$anagrams);
