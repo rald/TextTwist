@@ -1,4 +1,4 @@
-<?
+<?php
 	function freq($word) {
 		$c=[];
 		$a=str_split($word);
